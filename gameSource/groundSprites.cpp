@@ -9,6 +9,10 @@
 #include "minorGems/util/SettingsManager.h"
 #include "minorGems/io/file/File.h"
 
+#ifdef WIN32
+#include "minorGems/graphics/openGL/glInclude.h"
+#endif
+
 
 
 
@@ -154,7 +158,27 @@ float initGroundSpritesStep() {
                 groundSprites[b]->tiles = new SpriteHandle*[tH];
                 groundSprites[b]->squareTiles = new SpriteHandle*[tH];
                 
-                groundSprites[b]->wholeSheet = fillSprite( rawImage );
+                groundSprites[b]->wholeSheet = NULL;
+
+                char wholeSheetFitsTextureLimit = true;
+
+#ifdef WIN32
+                GLint maxTextureSize = 0;
+                glGetIntegerv( GL_MAX_TEXTURE_SIZE, &maxTextureSize );
+
+                if( maxTextureSize > 0 &&
+                    ( w > maxTextureSize || h > maxTextureSize ) ) {
+                    wholeSheetFitsTextureLimit = false;
+
+                    printf( "Skipping whole ground sheet %s with w=%d and "
+                            "h=%d because GL_MAX_TEXTURE_SIZE=%d\n",
+                            fileName, w, h, (int)maxTextureSize );
+                    }
+#endif
+
+                if( wholeSheetFitsTextureLimit ) {
+                    groundSprites[b]->wholeSheet = fillSprite( rawImage );
+                    }
 
                 // check if all cache files exist
                 // if so, don't need to load double version of whole image
@@ -458,7 +482,9 @@ void freeGroundSprites() {
             delete [] groundSprites[i]->squareTiles;
             
 
-            freeSprite( groundSprites[i]->wholeSheet );
+            if( groundSprites[i]->wholeSheet != NULL ) {
+                freeSprite( groundSprites[i]->wholeSheet );
+                }
             
             delete groundSprites[i];
             }
@@ -467,4 +493,3 @@ void freeGroundSprites() {
 
     groundSprites = NULL;
     }
-

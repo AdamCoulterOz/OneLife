@@ -7276,7 +7276,7 @@ void LivingLifePage::draw( doublePair inViewCenter,
                             }
                         }
                     
-                    if( allSameBiome ) {
+                    if( allSameBiome && s->wholeSheet != NULL ) {
                         
                         doublePair lastCornerPos = 
                             { pos.x + ( s->numTilesWide - 1 ) * CELL_D, 
@@ -27992,4 +27992,3 @@ void LivingLifePage::updateLeadership() {
     
     
     }
-
