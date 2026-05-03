@@ -9,7 +9,7 @@
 #include "minorGems/util/SettingsManager.h"
 #include "minorGems/io/file/File.h"
 
-#ifdef WIN32
+#if defined( WIN32 ) && !defined( REGENERATE_CACHES )
 #include "minorGems/graphics/openGL/glInclude.h"
 #endif
 
@@ -162,7 +162,7 @@ float initGroundSpritesStep() {
 
                 char wholeSheetFitsTextureLimit = true;
 
-#ifdef WIN32
+#if defined( WIN32 ) && !defined( REGENERATE_CACHES )
                 GLint maxTextureSize = 0;
                 glGetIntegerv( GL_MAX_TEXTURE_SIZE, &maxTextureSize );
 
