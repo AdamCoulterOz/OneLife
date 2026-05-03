@@ -28,6 +28,26 @@ if [[ "$data_version" != "$data_version_expected" ]]; then
     exit 1
 fi
 
+ensure_image_convert() {
+    if command -v convert >/dev/null 2>&1 &&
+        convert -version 2>/dev/null | grep -qi 'ImageMagick'; then
+        return 0
+    fi
+
+    if command -v magick >/dev/null 2>&1 &&
+        magick -version 2>/dev/null | grep -qi 'ImageMagick'; then
+        local tools_dir="${RUNNER_TEMP:-/tmp}/one-life-tools"
+        mkdir -p "$tools_dir"
+        printf '#!/usr/bin/env bash\nexec magick "$@"\n' > "$tools_dir/convert"
+        chmod +x "$tools_dir/convert"
+        export PATH="$tools_dir:$PATH"
+        return 0
+    fi
+
+    echo "ImageMagick convert is required to regenerate gameSource/*.tga assets." >&2
+    exit 1
+}
+
 rm -rf "$package_root"
 mkdir -p "$payload_root"
 
@@ -109,6 +129,7 @@ build_regenerate_caches() {
 }
 
 build_linux() {
+    ensure_image_convert
     ( cd "$repo_root" && ./configure 1 )
     make -C "$repo_root/gameSource"
 
@@ -217,6 +238,7 @@ sign_and_notarize_macos() {
 }
 
 build_macos() {
+    ensure_image_convert
     ( cd "$repo_root" && ./configure 2 )
 
     local sdl_prefix
@@ -245,6 +267,7 @@ build_macos() {
 }
 
 build_windows() {
+    ensure_image_convert
     ( cd "$repo_root" && ./configure 3 )
     make -C "$repo_root/gameSource"
 
