@@ -2973,8 +2973,6 @@ LivingLifePage::LivingLifePage()
           mMapOffsetY( 0 ),
           mEKeyEnabled( false ),
           mEKeyDown( false ),
-          mGuiPanelSprite( loadSprite( "guiPanel.tga", false ) ),
-          mGuiBloodSprite( loadSprite( "guiBlood.tga", false ) ),
           mNotePaperSprite( loadSprite( "notePaper.tga", false ) ),
           mFloorSplitSprite( loadSprite( "floorSplit.tga", false ) ),
           mCellBorderSprite( loadWhiteSprite( "cellBorder.tga" ) ),
@@ -3037,6 +3035,14 @@ LivingLifePage::LivingLifePage()
     mFullXObjectID = SettingsManager::getIntSetting( "fullX", 0 );
     
     useMainSettings();
+
+    for( int i=0; i<2; i++ ) {
+        mGuiPanelSprites[i] = NULL;
+        mGuiBloodSprites[i] = NULL;
+        }
+
+    splitAndExpandSprites( "guiPanel.tga", 2, mGuiPanelSprites );
+    splitAndExpandSprites( "guiBlood.tga", 2, mGuiBloodSprites );
     
 
     mHomeSlipSprites[0] = mHomeSlipSprite;
@@ -3597,8 +3603,14 @@ LivingLifePage::~LivingLifePage() {
         freeSprite( mYumSlipSprites[i] );
         }
 
-    freeSprite( mGuiPanelSprite );
-    freeSprite( mGuiBloodSprite );
+    for( int i=0; i<2; i++ ) {
+        if( mGuiPanelSprites[i] != NULL ) {
+            freeSprite( mGuiPanelSprites[i] );
+            }
+        if( mGuiBloodSprites[i] != NULL ) {
+            freeSprite( mGuiBloodSprites[i] );
+            }
+        }
     
     freeSprite( mFloorSplitSprite );
     
@@ -10745,7 +10757,13 @@ void LivingLifePage::draw( doublePair inViewCenter,
     setDrawColor( 1, 1, 1, 1 );
     doublePair panelPos = lastScreenViewCenter;
     panelPos.y -= 242 + 32 + 16 + 6;
-    drawSprite( mGuiPanelSprite, panelPos );
+    for( int i=0; i<2; i++ ) {
+        if( mGuiPanelSprites[i] != NULL ) {
+            doublePair partPos = panelPos;
+            partPos.x += ( i * 2 - 1 ) * 512;
+            drawSprite( mGuiPanelSprites[i], partPos );
+            }
+        }
 
     if( ourLiveObject != NULL &&
         ourLiveObject->dying  &&
@@ -10754,7 +10772,13 @@ void LivingLifePage::draw( doublePair inViewCenter,
         doublePair bloodPos = panelPos;
         bloodPos.y -= 32;
         bloodPos.x -= 32;
-        drawSprite( mGuiBloodSprite, bloodPos );
+        for( int i=0; i<2; i++ ) {
+            if( mGuiBloodSprites[i] != NULL ) {
+                doublePair partPos = bloodPos;
+                partPos.x += ( i * 2 - 1 ) * 512;
+                drawSprite( mGuiBloodSprites[i], partPos );
+                }
+            }
         toggleMultiplicativeBlend( false );
         }
     

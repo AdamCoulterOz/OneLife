@@ -705,8 +705,8 @@ class LivingLifePage : public GamePage, public ActionListener {
         char mEKeyDown;
         
 
-        SpriteHandle mGuiPanelSprite;
-        SpriteHandle mGuiBloodSprite;
+        SpriteHandle mGuiPanelSprites[2];
+        SpriteHandle mGuiBloodSprites[2];
         
 
         SpriteHandle mHungerBoxSprites[ NUM_HUNGER_BOX_SPRITES ];
