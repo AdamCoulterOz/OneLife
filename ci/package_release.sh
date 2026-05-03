@@ -266,6 +266,109 @@ build_macos() {
     sign_and_notarize_macos "$app_path" "$zip_path"
 }
 
+windows_dependency_paths() {
+    local binary="$1"
+
+    ldd "$binary" | awk '
+        /=>/ {
+            if ($(NF - 1) ~ /^\//) {
+                print $(NF - 1)
+            }
+            next
+        }
+        /^[[:space:]]*\// {
+            print $1
+        }'
+}
+
+is_windows_system_dependency() {
+    local dep_lower
+    dep_lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+
+    [[ "$dep_lower" == /c/windows/* || "$dep_lower" == /windows/* ]]
+}
+
+copy_windows_runtime_dependencies() {
+    local binary="$1"
+
+    if ! command -v ldd >/dev/null 2>&1; then
+        echo "ldd not found; cannot validate Windows runtime DLL dependencies" >&2
+        exit 1
+    fi
+
+    local -a queue=("$binary")
+    local -a seen=()
+    local current
+
+    while ((${#queue[@]} > 0)); do
+        current="${queue[0]}"
+        queue=("${queue[@]:1}")
+
+        local current_key
+        current_key="$(cygpath -am "$current" | tr '[:upper:]' '[:lower:]')"
+
+        local already_seen=false
+        local seen_key
+        for seen_key in "${seen[@]}"; do
+            if [[ "$seen_key" == "$current_key" ]]; then
+                already_seen=true
+                break
+            fi
+        done
+        if [[ "$already_seen" == true ]]; then
+            continue
+        fi
+        seen+=("$current_key")
+
+        local dep
+        while IFS= read -r dep; do
+            [[ -n "$dep" ]] || continue
+            is_windows_system_dependency "$dep" && continue
+
+            if [[ ! -f "$dep" ]]; then
+                echo "Required Windows runtime dependency missing: $dep" >&2
+                exit 1
+            fi
+
+            local dep_base="$payload_root/$(basename "$dep")"
+            if [[ ! -f "$dep_base" ]]; then
+                cp "$dep" "$payload_root/"
+                queue+=("$dep_base")
+            fi
+        done < <(windows_dependency_paths "$current")
+    done
+}
+
+validate_windows_runtime_dependencies() {
+    local failed=false
+    local binary
+
+    for binary in "$payload_root/OneLife.exe" "$payload_root"/*.dll; do
+        [[ -f "$binary" ]] || continue
+
+        if ldd "$binary" | grep -qi 'not found'; then
+            echo "Unresolved Windows runtime dependencies for $binary:" >&2
+            ldd "$binary" >&2
+            failed=true
+        fi
+    done
+
+    if [[ "$failed" == true ]]; then
+        exit 1
+    fi
+
+    {
+        echo "Windows runtime dependency manifest"
+        echo
+        for binary in "$payload_root/OneLife.exe" "$payload_root"/*.dll; do
+            [[ -f "$binary" ]] || continue
+            echo "## $(basename "$binary")"
+            ldd "$binary"
+            echo
+        done
+    } > "$payload_root/windows-runtime-dependencies.txt"
+}
+
 build_windows() {
     ensure_image_convert
     ( cd "$repo_root" && ./configure 3 )
@@ -281,31 +384,14 @@ build_windows() {
         exit 1
     fi
 
-    if command -v cygpath >/dev/null 2>&1; then
-        local mingw_bin
-        mingw_bin="$(cygpath -u "${MINGW_PREFIX:-/mingw64}")/bin"
-
-        local required_runtime_dlls=(
-            SDL.dll
-            libgcc_s_seh-1.dll
-            libstdc++-6.dll
-            libwinpthread-1.dll
-            zlib1.dll
-            libpng16-16.dll
-        )
-
-        local dll
-        for dll in "${required_runtime_dlls[@]}"; do
-            if [[ ! -f "$mingw_bin/$dll" ]]; then
-                echo "Required Windows runtime DLL missing: $mingw_bin/$dll" >&2
-                exit 1
-            fi
-            cp "$mingw_bin/$dll" "$payload_root/"
-        done
-    else
+    if ! command -v cygpath >/dev/null 2>&1; then
         echo "cygpath not found; cannot locate MSYS2/MinGW runtime DLLs" >&2
         exit 1
     fi
+
+    copy_windows_runtime_dependencies "$payload_root/OneLife.exe"
+    validate_windows_runtime_dependencies
+
     build_regenerate_caches
 
     ( cd "$package_root" && 7z a "$dist_root/OneLife_${package_label}_Windows.zip" "OneLife_${package_label}" )
