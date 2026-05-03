@@ -7247,7 +7247,7 @@ void LivingLifePage::draw( doublePair inViewCenter,
                     setY += s->numTilesHigh;
                     }
                 if( setX < 0 ) {
-                    setX += s->numTilesHigh;
+                    setX += s->numTilesWide;
                     }
                 
                 if( pass == 0 )
