@@ -1,0 +1,187 @@
+name: Build pinned release artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      client_label:
+        description: Client release label
+        required: true
+        default: "v434-floorfix"
+      data_version:
+        description: OneLifeData7 tag/version to bundle
+        required: true
+        default: "435"
+      minor_gems_ref:
+        description: minorGems ref/tag to build against
+        required: true
+        default: "OneLife_v434"
+      data_ref:
+        description: OneLifeData7 ref/tag to bundle
+        required: true
+        default: "OneLife_v435"
+      release_tag:
+        description: GitHub release tag to create
+        required: true
+        default: "OneLife_v434-floorfix_d435"
+      draft:
+        description: Create the GitHub release as a draft
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-24.04
+            artifact_suffix: Linux.tar.gz
+          - platform: macos
+            runner: macos-14
+            artifact_suffix: macOS.zip
+          - platform: windows
+            runner: windows-2022
+            artifact_suffix: Windows.zip
+
+    steps:
+      - name: Checkout OneLife
+        uses: actions/checkout@v4
+        with:
+          path: OneLife
+
+      - name: Checkout minorGems
+        uses: actions/checkout@v4
+        with:
+          repository: AdamCoulterOz/minorGems
+          ref: ${{ inputs.minor_gems_ref }}
+          path: minorGems
+
+      - name: Checkout pinned OneLifeData7
+        uses: actions/checkout@v4
+        with:
+          repository: AdamCoulterOz/OneLifeData7
+          ref: ${{ inputs.data_ref }}
+          path: OneLifeData7
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libsdl1.2-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libx11-dev \
+            p7zip-full
+
+      - name: Install macOS dependencies
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          brew update
+          brew install sdl12-compat
+
+      - name: Install Windows dependencies
+        if: matrix.platform == 'windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW32
+          update: true
+          install: >-
+            base-devel
+            git
+            mingw-w64-i686-gcc
+            mingw-w64-i686-SDL
+            mingw-w64-i686-zlib
+            mingw-w64-i686-libpng
+            p7zip
+
+      - name: Build and package Linux
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          chmod +x OneLife/ci/package_release.sh
+          OneLife/ci/package_release.sh linux "${{ inputs.client_label }}_d${{ inputs.data_version }}" "${{ inputs.data_version }}"
+
+      - name: Build and package macOS
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          chmod +x OneLife/ci/package_release.sh
+          OneLife/ci/package_release.sh macos "${{ inputs.client_label }}_d${{ inputs.data_version }}" "${{ inputs.data_version }}"
+
+      - name: Build and package Windows
+        if: matrix.platform == 'windows'
+        shell: msys2 {0}
+        run: |
+          chmod +x OneLife/ci/package_release.sh
+          OneLife/ci/package_release.sh windows "${{ inputs.client_label }}_d${{ inputs.data_version }}" "${{ inputs.data_version }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OneLife_${{ inputs.client_label }}_d${{ inputs.data_version }}_${{ matrix.artifact_suffix }}
+          path: OneLife/dist/OneLife_${{ inputs.client_label }}_d${{ inputs.data_version }}_${{ matrix.artifact_suffix }}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub release
+    runs-on: ubuntu-24.04
+    needs: build
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          CLIENT_LABEL: ${{ inputs.client_label }}
+          DATA_VERSION: ${{ inputs.data_version }}
+          MINOR_GEMS_REF: ${{ inputs.minor_gems_ref }}
+          DATA_REF: ${{ inputs.data_ref }}
+          DRAFT_FLAG: ${{ inputs.draft && '--draft' || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          notes="$(mktemp)"
+          cat > "$notes" <<EOF
+          OneLife client build \`${CLIENT_LABEL}\` with the floor-hugging wall/floor rendering fix from branch \`${GITHUB_REF_NAME}\`.
+
+          Pinned sibling snapshots:
+
+          - minorGems: \`${MINOR_GEMS_REF}\`
+          - OneLifeData7: \`${DATA_REF}\` (data version \`${DATA_VERSION}\`)
+          - Data is bundled locally; the live game server is not expected to stream missing visual assets during play.
+
+          macOS artifacts are signed/notarized only when the Apple Developer secrets are configured for this repository.
+          EOF
+
+          gh release create "$RELEASE_TAG" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OneLife ${CLIENT_LABEL} with data ${DATA_VERSION}" \
+            --notes-file "$notes" \
+            $DRAFT_FLAG
