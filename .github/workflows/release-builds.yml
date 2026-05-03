@@ -181,9 +181,20 @@ jobs:
           macOS artifacts are signed/notarized only when the Apple Developer secrets are configured for this repository.
           EOF
 
-          gh release create "$RELEASE_TAG" artifacts/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "OneLife ${CLIENT_LABEL} with data ${DATA_VERSION}" \
-            --notes-file "$notes" \
-            $DRAFT_FLAG
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "OneLife ${CLIENT_LABEL} with data ${DATA_VERSION}" \
+              --notes-file "$notes"
+            gh release upload "$RELEASE_TAG" artifacts/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" artifacts/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "OneLife ${CLIENT_LABEL} with data ${DATA_VERSION}" \
+              --notes-file "$notes" \
+              $DRAFT_FLAG
+          fi

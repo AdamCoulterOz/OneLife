@@ -282,12 +282,30 @@ build_windows() {
     fi
 
     if command -v cygpath >/dev/null 2>&1; then
-        local sdl_dll
-        sdl_dll="$(cygpath -u "${MINGW_PREFIX:-/mingw32}")/bin/SDL.dll"
-        [[ -f "$sdl_dll" ]] && cp "$sdl_dll" "$payload_root/"
-    fi
-    cp "$repo_root/build/win32"/*.dll "$payload_root/" 2>/dev/null || true
+        local mingw_bin
+        mingw_bin="$(cygpath -u "${MINGW_PREFIX:-/mingw64}")/bin"
 
+        local required_runtime_dlls=(
+            SDL.dll
+            libgcc_s_seh-1.dll
+            libstdc++-6.dll
+            libwinpthread-1.dll
+            zlib1.dll
+            libpng16-16.dll
+        )
+
+        local dll
+        for dll in "${required_runtime_dlls[@]}"; do
+            if [[ ! -f "$mingw_bin/$dll" ]]; then
+                echo "Required Windows runtime DLL missing: $mingw_bin/$dll" >&2
+                exit 1
+            fi
+            cp "$mingw_bin/$dll" "$payload_root/"
+        done
+    else
+        echo "cygpath not found; cannot locate MSYS2/MinGW runtime DLLs" >&2
+        exit 1
+    fi
     build_regenerate_caches
 
     ( cd "$package_root" && 7z a "$dist_root/OneLife_${package_label}_Windows.zip" "OneLife_${package_label}" )
