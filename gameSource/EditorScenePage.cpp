@@ -26,6 +26,20 @@ static GroundPickable groundPickable;
 static ObjectPickable objectPickable;
 
 
+static char isHorizontalDoor( ObjectRecord *inObject ) {
+    if( inObject == NULL || inObject->description == NULL ) {
+        return false;
+        }
+
+    if( strstr( inObject->description, "Door" ) == NULL ) {
+        return false;
+        }
+
+    return strstr( inObject->description, "+horizontal" ) != NULL ||
+        strstr( inObject->description, "+corner" ) != NULL;
+    }
+
+
 static double multAmount = 0.15;
 static double addAmount = 0.25;
 
@@ -416,7 +430,7 @@ void EditorScenePage::actionPerformed( GUIComponent *inTarget ) {
         if( biome >= 0 ) {
             
             if( wasRightClick ) {
-                
+
                 floodFill( mCurX, mCurY,
                            c->biome,
                            biome );
@@ -437,7 +451,7 @@ void EditorScenePage::actionPerformed( GUIComponent *inTarget ) {
             ObjectRecord *o = getObject( id );
             
             if( wasRightClick && c->oID > 0 ) {
-                
+
                 
                 if( getObject( c->oID )->numSlots > c->contained.size() ) {
                     c->contained.push_back( id );
@@ -1231,8 +1245,13 @@ void EditorScenePage::drawUnderComponents( doublePair inViewCenter,
                 char drawHuggingFloor = false;
                 
                 int cellOID = mCells[y][x].oID;
+                ObjectRecord *cellObject = NULL;
                 
-                if( cellOID > 0 && getObject( cellOID )->floorHugging ) {
+                if( cellOID > 0 ) {
+                    cellObject = getObject( cellOID );
+                    }
+
+                if( cellObject != NULL && cellObject->floorHugging ) {
                     
                     // assume any floors with roadParentID defined
                     // have special visual curves, etc, and don't make
@@ -1254,6 +1273,20 @@ void EditorScenePage::drawUnderComponents( doublePair inViewCenter,
                         passIDs[2] = mFloorCells[y][ x + 1 ].oID;
                         drawHuggingFloor = true;
                         }
+                    }
+
+                if( cellObject != NULL && isHorizontalDoor( cellObject ) &&
+                    y < mSceneH - 1 &&
+                    mFloorCells[ y + 1 ][ x ].oID > 0 &&
+                    getObject( mFloorCells[ y + 1 ][ x ].oID )->roadParentID
+                    == -1 ) {
+                    // Doors open downward, so bottom-wall doors reveal this
+                    // hidden threshold tile.  Fill it from the room above.
+                    passIDs[0] = mFloorCells[ y + 1 ][ x ].oID;
+                    passIDs[1] = 0;
+                    passIDs[2] = 0;
+                    drawHuggingFloor = true;
+                    fullTileHuggingFloor = true;
                     }
 
                 if( passIDs[1] > 0 && passIDs[1] == passIDs[2] ) {

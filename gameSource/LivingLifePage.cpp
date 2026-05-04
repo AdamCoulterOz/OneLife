@@ -65,6 +65,20 @@
 static ObjectPickable objectPickable;
 
 
+static char isHorizontalDoor( ObjectRecord *inObject ) {
+    if( inObject == NULL || inObject->description == NULL ) {
+        return false;
+        }
+
+    if( strstr( inObject->description, "Door" ) == NULL ) {
+        return false;
+        }
+
+    return strstr( inObject->description, "+horizontal" ) != NULL ||
+        strstr( inObject->description, "+corner" ) != NULL;
+    }
+
+
 
 #define MAP_D 64
 #define MAP_NUM_CELLS 4096
@@ -7487,8 +7501,13 @@ void LivingLifePage::draw( doublePair inViewCenter,
 
                 
                 int cellOID = mMap[mapI];
+                ObjectRecord *cellObject = NULL;
                 
-                if( cellOID > 0 && getObject( cellOID )->floorHugging ) {
+                if( cellOID > 0 ) {
+                    cellObject = getObject( cellOID );
+                    }
+
+                if( cellObject != NULL && cellObject->floorHugging ) {
 
                     // assume any floors with roadParentID defined
                     // have special visual curves, etc, and don't make
@@ -7511,6 +7530,20 @@ void LivingLifePage::draw( doublePair inViewCenter,
                         drawHuggingFloor = true;
                         
                         }
+                    }
+
+                if( cellObject != NULL && isHorizontalDoor( cellObject ) &&
+                    y < mMapD - 1 &&
+                    mMapFloors[ mapI + mMapD ] > 0 &&
+                    getObject( mMapFloors[ mapI + mMapD ] )->roadParentID
+                    == -1 ) {
+                    // Doors open downward, so bottom-wall doors reveal this
+                    // hidden threshold tile.  Fill it from the room above.
+                    passIDs[0] = mMapFloors[ mapI + mMapD ];
+                    passIDs[1] = 0;
+                    passIDs[2] = 0;
+                    drawHuggingFloor = true;
+                    fullTileHuggingFloor = true;
                     }
 
                 if( passIDs[1] > 0 && passIDs[1] == passIDs[2] ) {
@@ -27992,4 +28025,3 @@ void LivingLifePage::updateLeadership() {
     
     
     }
-
